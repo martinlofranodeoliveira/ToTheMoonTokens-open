@@ -67,3 +67,99 @@ PYTHONPATH=services/api/src python -m tothemoon_api.offline_dashboard --scenario
 The helper exposes `build_offline_dashboard(scenario="empty")` and `main(argv=None)`. Only the exact strings `"empty"` and `"degraded"` are accepted; any other type or value raises `ValueError("INVALID_OFFLINE_DASHBOARD_SCENARIO")`. Each call returns a fresh deterministic JSON-serializable dict with `schema_version`, `synthetic`, `scenario`, `health`, `dashboard`, `usage`, and `collections`, suitable for mocking the public `Health`, `Dashboard`, `Usage`, API-key, discovery, proposal, and audit-event shapes. Example values use `synthetic@example.invalid`, `org_id` 0, plan `"offline-demo"`, zero counters, and empty collections.
 
 Both scenarios are static fixtures, not real health, history, earnings, or production proof. `empty` reports `ok: true` with provider status `"offline"`; `degraded` reports `ok: false` with `"SYNTHETIC_DATA_UNAVAILABLE"`. No existing endpoint, route, login flow, or frontend behavior is changed or automatically wired to these fixtures.
+
+
+<!-- community-core:offline-quota-guard -->
+### Synthetic Offline Quota Guard Evaluator
+
+Helps local developers and test authors exercise synthetic quota decisions for simulate_order, token_audit and active_api_keys without network, credentials, or live services. It gives a single deterministic check for limit, usage and requested counts, reducing mock drift in offline tests. It performs no fetching, storage, or advice and makes no claim about real plans, earnings, or production enforcement.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_quota_guard.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be an object; any non-object payload yields {ok:false, allowed:false, action:"unknown", limit:0, used:0, requested:1, remaining:0, issues:["INVALID_PAYLOAD"]}. For object payloads, fields are validated in fixed order: action MUST be exactly one of "simulate_order", "token_audit", "active_api_keys" else INVALID_ACTION; quota MUST be an object else INVALID_QUOTA, otherwise quota[action] MUST be an integer 0..1000000 else INVALID_QUOTA_LIMIT; usage MUST be an object else INVALID_USAGE, otherwise usage[action] MUST be an integer 0..1000000 else INVALID_USAGE_VALUE; requested when missing defaults to 1, otherwise MUST be an integer 1..1000000 else INVALID_REQUESTED. Result action echoes input action when it is one of the three allowed values, otherwise "unknown". Result limit is quota[action] when valid else 0; used is usage[action] when valid else 0; requested is normalized requested else 1 on INVALID_REQUESTED; remaining is max(0, limit-used) when quota and usage values are valid else 0; allowed is true only when issues is empty and used+requested<=limit, otherwise false; issues lists all applicable codes in the fixed order above; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies and performs no trading, payment, or advice.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "action": "simulate_order",
+    "quota": {
+      "active_api_keys": 2,
+      "simulate_order": 5,
+      "token_audit": 5
+    },
+    "requested": 1,
+    "usage": {
+      "active_api_keys": 0,
+      "simulate_order": 2,
+      "token_audit": 0
+    }
+  },
+  "output": {
+    "action": "simulate_order",
+    "allowed": true,
+    "issues": [],
+    "limit": 5,
+    "ok": true,
+    "remaining": 3,
+    "requested": 1,
+    "used": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "action": "token_audit",
+    "quota": {
+      "active_api_keys": 2,
+      "simulate_order": 5,
+      "token_audit": 1
+    },
+    "requested": 1,
+    "usage": {
+      "active_api_keys": 0,
+      "simulate_order": 0,
+      "token_audit": 1
+    }
+  },
+  "output": {
+    "action": "token_audit",
+    "allowed": false,
+    "issues": [],
+    "limit": 1,
+    "ok": true,
+    "remaining": 0,
+    "requested": 1,
+    "used": 1
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "action": "unknown_action",
+    "quota": {},
+    "usage": {}
+  },
+  "output": {
+    "action": "unknown",
+    "allowed": false,
+    "issues": [
+      "INVALID_ACTION",
+      "INVALID_QUOTA_LIMIT",
+      "INVALID_USAGE_VALUE"
+    ],
+    "limit": 0,
+    "ok": false,
+    "remaining": 0,
+    "requested": 1,
+    "used": 0
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_quota_guard.py`.
