@@ -114,6 +114,7 @@ def inner(scope):
         subprocess.run(['/opt/node', 'node_modules/typescript/bin/tsc', '--noEmit'], check=True)
         subprocess.run(['/opt/node', 'node_modules/vite/bin/vite.js', 'build',
             '--outDir', '/tmp/ttm-web-dist', '--emptyOutDir', '--configLoader', 'runner'], check=True)
+    subprocess.run(['/usr/bin/python3', '/work/scripts/run-lab-tests.py', 'ToTheMoonTokens-open', scope], check=True, timeout=180, stdin=subprocess.DEVNULL)
 
 
 def sandbox(snapshot, python_venv, node_modules, node):

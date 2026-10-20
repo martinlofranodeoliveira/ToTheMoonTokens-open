@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from time import perf_counter
 from typing import Any
 
@@ -92,9 +93,12 @@ def _float(value: object, default: float = 0.0) -> float:
     if not isinstance(value, str | int | float):
         return default
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
         return default
+    if not math.isfinite(parsed):
+        return default
+    return parsed
 
 
 def _bool_flag(value: object) -> bool:
@@ -113,8 +117,14 @@ def _risk_score(is_honeypot: bool, raw_score: object = None, default: int = 15) 
     if not isinstance(raw_score, str | int | float):
         return default
     try:
-        score = int(float(raw_score))
-    except (TypeError, ValueError):
+        parsed = float(raw_score)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(parsed):
+        return default
+    try:
+        score = int(parsed)
+    except (TypeError, ValueError, OverflowError):
         return default
     return max(0, min(99, score))
 

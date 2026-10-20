@@ -49,3 +49,5 @@ zero failures/errors/skips. It does not select financial live integrations or
 operational deployment tests. Both API tests and frontend checks run through
 `scripts/checks-offline.py`, with no network or private credentials; dependencies
 and source are read-only and build/database scratch stays under `/tmp`.
+
+Provider numeric fields that are missing or non-finite (NaN, +/-Infinity) fall back to explicit defaults in `security.py` (`_float`/`_risk_score`); unavailable providers yield placeholder/degraded audits. This describes unavailable-data handling only and is not investment advice or a safety guarantee.
