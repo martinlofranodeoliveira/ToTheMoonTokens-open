@@ -51,3 +51,19 @@ operational deployment tests. Both API tests and frontend checks run through
 and source are read-only and build/database scratch stays under `/tmp`.
 
 Provider numeric fields that are missing or non-finite (NaN, +/-Infinity) fall back to explicit defaults in `security.py` (`_float`/`_risk_score`); unavailable providers yield placeholder/degraded audits. This describes unavailable-data handling only and is not investment advice or a safety guarantee.
+
+## Offline dashboard fixtures (synthetic, stdlib only)
+
+For local UI development and mocked tests, `services/api/src/tothemoon_api/offline_dashboard.py` builds fully synthetic empty/degraded panel snapshots without importing or starting API, database, provider, wallet, payment, exchange, bot, model, HTTP, or configuration code. It uses only the standard library and needs no JWT, database, GPU, provider credentials, or extra installation.
+
+From the repository root:
+
+```sh
+PYTHONPATH=services/api/src python -c "from tothemoon_api.offline_dashboard import build_offline_dashboard; print(build_offline_dashboard('empty'))"
+PYTHONPATH=services/api/src python -m tothemoon_api.offline_dashboard --scenario empty
+PYTHONPATH=services/api/src python -m tothemoon_api.offline_dashboard --scenario degraded
+```
+
+The helper exposes `build_offline_dashboard(scenario="empty")` and `main(argv=None)`. Only the exact strings `"empty"` and `"degraded"` are accepted; any other type or value raises `ValueError("INVALID_OFFLINE_DASHBOARD_SCENARIO")`. Each call returns a fresh deterministic JSON-serializable dict with `schema_version`, `synthetic`, `scenario`, `health`, `dashboard`, `usage`, and `collections`, suitable for mocking the public `Health`, `Dashboard`, `Usage`, API-key, discovery, proposal, and audit-event shapes. Example values use `synthetic@example.invalid`, `org_id` 0, plan `"offline-demo"`, zero counters, and empty collections.
+
+Both scenarios are static fixtures, not real health, history, earnings, or production proof. `empty` reports `ok: true` with provider status `"offline"`; `degraded` reports `ok: false` with `"SYNTHETIC_DATA_UNAVAILABLE"`. No existing endpoint, route, login flow, or frontend behavior is changed or automatically wired to these fixtures.
