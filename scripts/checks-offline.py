@@ -44,7 +44,38 @@ def hashes(root):
             for path in public_files(root)}
 
 
+def dependency_manifest(root):
+    """Hash package files without following dependency symlinks."""
+    result = {}
+    def visit(directory):
+        for path in sorted(directory.iterdir()):
+            key = str(path.relative_to(root))
+            if path.is_symlink():
+                result[key] = ['symlink', os.readlink(path)]
+            elif path.is_dir():
+                visit(path)
+            elif path.is_file():
+                result[key] = ['file', path.stat().st_mode & 0o777, hashlib.sha256(path.read_bytes()).hexdigest()]
+            else:
+                raise ValueError('Special dependency files are not admitted')
+    visit(root)
+    return result
+
+
+def stage_dependencies(source, target):
+    source = Path(source).resolve(strict=True)
+    before = dependency_manifest(source)
+    # Namespace setup may run as root on hosted Ubuntu, whose runner home is
+    # private to another uid. Copy packages before entering that user namespace.
+    shutil.copytree(source, target, symlinks=True, copy_function=shutil.copy)
+    assert dependency_manifest(target) == before, 'Dependency staging changed content'
+    return source, target, before
+
+
 def probe():
+    status = Path('/proc/self/status').read_text()
+    assert int(next(line.split()[1] for line in status.splitlines() if line.startswith('CapEff:')), 16) == 0
+    assert next(line.split()[1] for line in status.splitlines() if line.startswith('NoNewPrivs:')) == '1'
     assert not Path('/home/martin').exists()
     assert not Path('/work/.git').exists()
     assert not Path('/work/.env').exists()
@@ -87,7 +118,7 @@ def inner(scope):
 
 def sandbox(snapshot, python_venv, node_modules, node):
     command = ['bwrap', '--unshare-all', '--unshare-user', '--disable-userns',
-               '--die-with-parent', '--new-session', '--clearenv']
+               '--die-with-parent', '--new-session', '--clearenv', '--cap-drop', 'ALL']
     for name in ('usr', 'bin', 'sbin', 'lib', 'lib64'):
         path = Path('/') / name
         if path.is_symlink():
@@ -100,7 +131,8 @@ def sandbox(snapshot, python_venv, node_modules, node):
     if runtime not in (Path('/usr'), Path('/usr/local')):
         if not str(runtime).startswith('/opt/hostedtoolcache/Python/'):
             raise ValueError('Unsupported Python runtime mount')
-        command += ['--ro-bind', str(runtime), str(runtime)]
+        command += ['--ro-bind', str(runtime), str(runtime),
+                    '--setenv', 'LD_LIBRARY_PATH', str(runtime / 'lib')]
     command += ['--proc', '/proc', '--dev', '/dev', '--size', '536870912', '--tmpfs', '/tmp',
                 '--ro-bind', str(snapshot), '/work']
     if python_venv:
@@ -134,18 +166,30 @@ def main():
         parser.error('web checks require explicit Node and dependency paths')
     before = hashes(ROOT)
     with tempfile.TemporaryDirectory(prefix='ttm-public-check-') as temporary:
-        snapshot = Path(temporary) / 'source'
+        scratch = Path(temporary)
+        snapshot = scratch / 'source'
         for source in public_files(ROOT):
             target = snapshot / source.relative_to(ROOT)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
         (snapshot / 'apps/web-next/node_modules').mkdir(parents=True, exist_ok=True)
         assert hashes(snapshot) == before
-        command = sandbox(snapshot, args.python_venv, args.node_modules, args.node)
+        dependency_sources = []
+        python_venv, node_modules = args.python_venv, args.node_modules
+        if python_venv:
+            original, python_venv, manifest = stage_dependencies(python_venv, scratch / 'venv')
+            dependency_sources.append((original, python_venv, manifest))
+        if node_modules:
+            original, node_modules, manifest = stage_dependencies(node_modules, scratch / 'node_modules')
+            dependency_sources.append((original, node_modules, manifest))
+        command = sandbox(snapshot, python_venv, node_modules, args.node)
         command += ['--chdir', '/work', '--',
                     '/opt/venv/bin/python' if args.python_venv else sys.executable,
                     '/work/scripts/checks-offline.py', args.scope, '--inner']
         result = subprocess.run(command, env={'PATH': '/usr/bin:/bin'}, timeout=600)
+        for original, staged, manifest in dependency_sources:
+            assert dependency_manifest(original) == manifest, 'Installed dependencies changed'
+            assert dependency_manifest(staged) == manifest, 'Staged dependencies changed'
         assert hashes(snapshot) == before, 'Snapshot changed during isolated checks'
         assert hashes(ROOT) == before, 'Source changed during isolated checks'
         if result.returncode:

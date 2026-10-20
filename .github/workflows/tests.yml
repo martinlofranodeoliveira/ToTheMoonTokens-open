@@ -33,8 +33,9 @@ jobs:
           Path(os.environ['RUNNER_TEMP'], 'ttm-requirements.txt').write_text('\n'.join(requirements) + '\n')
           PY
           "$RUNNER_TEMP/ttm-api-venv/bin/python" -m pip install --index-url https://pypi.org/simple --only-binary=:all: -r "$RUNNER_TEMP/ttm-requirements.txt"
+      # Privilege is used only for namespace setup; the test child drops all capabilities.
       - name: Run exactly 269 synthetic or mocked API cases offline
-        run: python scripts/checks-offline.py api --python-venv "$RUNNER_TEMP/ttm-api-venv"
+        run: sudo -n -- env LD_LIBRARY_PATH="$pythonLocation/lib" "$(command -v python)" scripts/checks-offline.py api --python-venv "$RUNNER_TEMP/ttm-api-venv"
 
   frontend:
     runs-on: ubuntu-24.04
@@ -51,5 +52,6 @@ jobs:
       - name: Install npm dependencies without lifecycle scripts
         working-directory: apps/web-next
         run: npm ci --ignore-scripts --registry=https://registry.npmjs.org --no-audit --no-fund
+      # The test child retains no capabilities and has no network.
       - name: Check types and build offline
-        run: python3 scripts/checks-offline.py web --node "$(command -v node)" --node-modules "$GITHUB_WORKSPACE/apps/web-next/node_modules"
+        run: sudo -n -- /usr/bin/python3 scripts/checks-offline.py web --node "$(command -v node)" --node-modules "$GITHUB_WORKSPACE/apps/web-next/node_modules"
