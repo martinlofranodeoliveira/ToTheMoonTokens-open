@@ -163,3 +163,76 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_quota_guard.py`.
+
+
+<!-- community-core:offline-token-discovery-check -->
+### Synthetic Offline Token Discovery Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic token_discoveries shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for symbol, chain, risk_score and flagged with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real tokens, prices, risk, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_token_discovery_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, symbol:"", chain:"unknown", risk_score:0, flagged:false, issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: symbol MUST be a string whose stripped length is 1..20 and whose stripped characters are only A-Z a-z 0-9 dot underscore hyphen else INVALID_SYMBOL; chain when missing defaults to "unknown" without error, otherwise MUST be exactly one of "ethereum", "solana", "base" else INVALID_CHAIN; risk_score when missing defaults to 0 without error, otherwise MUST be an int or float excluding bool that is finite and in range 0..100 inclusive else INVALID_RISK_SCORE; flagged when missing defaults to false without error, otherwise MUST be of type bool else INVALID_FLAGGED. Result symbol is stripped uppercased input when valid else ""; chain echoes input when valid or "unknown" when missing else "unknown"; risk_score echoes input when valid or 0 when missing else 0; flagged is false when missing, echoes input when valid, else false; issues lists all applicable codes among INVALID_SYMBOL, INVALID_CHAIN, INVALID_RISK_SCORE, INVALID_FLAGGED in that fixed order; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real tokens, risk, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "chain": "ethereum",
+    "flagged": false,
+    "risk_score": 12.5,
+    "symbol": " weth "
+  },
+  "output": {
+    "chain": "ethereum",
+    "flagged": false,
+    "issues": [],
+    "ok": true,
+    "risk_score": 12.5,
+    "symbol": "WETH"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "symbol": "SOL"
+  },
+  "output": {
+    "chain": "unknown",
+    "flagged": false,
+    "issues": [],
+    "ok": true,
+    "risk_score": 0,
+    "symbol": "SOL"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "chain": "unknown-chain",
+    "flagged": 1,
+    "risk_score": 999,
+    "symbol": ""
+  },
+  "output": {
+    "chain": "unknown",
+    "flagged": false,
+    "issues": [
+      "INVALID_SYMBOL",
+      "INVALID_CHAIN",
+      "INVALID_RISK_SCORE",
+      "INVALID_FLAGGED"
+    ],
+    "ok": false,
+    "risk_score": 0,
+    "symbol": ""
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_token_discovery_check.py`.
