@@ -377,3 +377,70 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_health_check.py`.
+
+
+<!-- community-core:offline-dashboard-check -->
+### Synthetic Offline Dashboard Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic dashboard shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for email, org_id and requests_this_month with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real accounts, activity, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_dashboard_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, email:"", org_id:0, requests_this_month:0, issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: email when missing defaults to "synthetic@example.invalid" without error, otherwise MUST be a string whose stripped length is 5..80 and whose stripped value contains exactly one "@" with "." in the part after "@" else INVALID_EMAIL; org_id when missing defaults to 0 without error, otherwise MUST be an integer excluding bool in range 0..1000000 inclusive else INVALID_ORG_ID; requests_this_month when missing defaults to 0 without error, otherwise MUST be an integer excluding bool in range 0..1000000 inclusive else INVALID_REQUESTS_THIS_MONTH. Result email is "synthetic@example.invalid" when missing, stripped input when valid, else ""; org_id is 0 when missing, echoes input when valid, else 0; requests_this_month is 0 when missing, echoes input when valid, else 0; issues lists all applicable codes among INVALID_EMAIL, INVALID_ORG_ID, INVALID_REQUESTS_THIS_MONTH in that fixed order; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real accounts, activity, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "email": "synthetic@example.invalid",
+    "org_id": 0,
+    "requests_this_month": 0
+  },
+  "output": {
+    "email": "synthetic@example.invalid",
+    "issues": [],
+    "ok": true,
+    "org_id": 0,
+    "requests_this_month": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "org_id": 5
+  },
+  "output": {
+    "email": "synthetic@example.invalid",
+    "issues": [],
+    "ok": true,
+    "org_id": 5,
+    "requests_this_month": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "email": "bad",
+    "org_id": -1,
+    "requests_this_month": "many"
+  },
+  "output": {
+    "email": "",
+    "issues": [
+      "INVALID_EMAIL",
+      "INVALID_ORG_ID",
+      "INVALID_REQUESTS_THIS_MONTH"
+    ],
+    "ok": false,
+    "org_id": 0,
+    "requests_this_month": 0
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_dashboard_check.py`.
