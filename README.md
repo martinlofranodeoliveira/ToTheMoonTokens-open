@@ -444,3 +444,70 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_dashboard_check.py`.
+
+
+<!-- community-core:offline-api-key-check -->
+### Synthetic Offline API Key Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic api_keys shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for label, scope and active with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real credentials, permissions, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_api_key_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, label:"", scope:"read", active:false, issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: label MUST be a string whose stripped length is 1..30 and whose stripped characters are only A-Z a-z 0-9 space underscore hyphen else INVALID_LABEL; scope when missing defaults to "read" without error, otherwise MUST be exactly one of "read", "write", "audit" else INVALID_SCOPE; active when missing defaults to false without error, otherwise MUST be of type bool else INVALID_ACTIVE. Result label is stripped input when valid else ""; scope is "read" when missing, echoes input when valid, else "read"; active is false when missing, echoes input when valid, else false; issues lists all applicable codes among INVALID_LABEL, INVALID_SCOPE, INVALID_ACTIVE in that fixed order; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real credentials, permissions, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "active": true,
+    "label": " dev-key_1 ",
+    "scope": "write"
+  },
+  "output": {
+    "active": true,
+    "issues": [],
+    "label": "dev-key_1",
+    "ok": true,
+    "scope": "write"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "label": "a"
+  },
+  "output": {
+    "active": false,
+    "issues": [],
+    "label": "a",
+    "ok": true,
+    "scope": "read"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "active": 1,
+    "label": "",
+    "scope": "super"
+  },
+  "output": {
+    "active": false,
+    "issues": [
+      "INVALID_LABEL",
+      "INVALID_SCOPE",
+      "INVALID_ACTIVE"
+    ],
+    "label": "",
+    "ok": false,
+    "scope": "read"
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_api_key_check.py`.
