@@ -236,3 +236,76 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_token_discovery_check.py`.
+
+
+<!-- community-core:offline-copilot-proposal-check -->
+### Synthetic Offline Copilot Proposal Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic copilot_proposals shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for title, strategy, confidence and status with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real strategies, performance, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_copilot_proposal_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, title:"", strategy:"unknown", confidence:0, status:"draft", issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: title MUST be a string whose stripped length is 1..80 and whose stripped characters are only A-Z a-z 0-9 space underscore hyphen dot else INVALID_TITLE; strategy when missing defaults to "unknown" without error, otherwise MUST be exactly one of "momentum", "mean-reversion", "breakout" else INVALID_STRATEGY; confidence when missing defaults to 0 without error, otherwise MUST be an int or float excluding bool that is finite and in range 0..100 inclusive else INVALID_CONFIDENCE; status when missing defaults to "draft" without error, otherwise MUST be exactly one of "draft", "proposed", "approved", "rejected" else INVALID_STATUS. Result title is stripped input when valid else ""; strategy echoes input when valid or "unknown" when missing else "unknown"; confidence echoes input when valid or 0 when missing else 0; status is "draft" when missing, echoes input when valid, else "draft"; issues lists all applicable codes among INVALID_TITLE, INVALID_STRATEGY, INVALID_CONFIDENCE, INVALID_STATUS in that fixed order; ok is true only when issues is empty. The pattern mirrors synthetic copilot_proposals shapes from offline dashboard fixtures for local offline development with synthetic data. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real strategies, performance, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "confidence": 75.5,
+    "status": "proposed",
+    "strategy": "momentum",
+    "title": " Momentum scan "
+  },
+  "output": {
+    "confidence": 75.5,
+    "issues": [],
+    "ok": true,
+    "status": "proposed",
+    "strategy": "momentum",
+    "title": "Momentum scan"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "title": "SOL breakout"
+  },
+  "output": {
+    "confidence": 0,
+    "issues": [],
+    "ok": true,
+    "status": "draft",
+    "strategy": "unknown",
+    "title": "SOL breakout"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "confidence": 999,
+    "status": "live",
+    "strategy": "scalping",
+    "title": ""
+  },
+  "output": {
+    "confidence": 0,
+    "issues": [
+      "INVALID_TITLE",
+      "INVALID_STRATEGY",
+      "INVALID_CONFIDENCE",
+      "INVALID_STATUS"
+    ],
+    "ok": false,
+    "status": "draft",
+    "strategy": "unknown",
+    "title": ""
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_copilot_proposal_check.py`.
