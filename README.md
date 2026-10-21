@@ -309,3 +309,71 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_copilot_proposal_check.py`.
+
+
+<!-- community-core:offline-health-check -->
+### Synthetic Offline Health Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic health shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for healthy, mode and provider_status with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real health, availability, or production enforcement. This module is independently testable; application integration is outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_health_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, healthy:false, mode:"synthetic", provider_status:"offline", issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: healthy when missing defaults to true without error, otherwise MUST be exactly type bool else INVALID_HEALTHY; mode when missing defaults to "synthetic" without error, otherwise MUST be exactly "synthetic" else INVALID_MODE; provider_status when missing defaults to "offline" without error, otherwise MUST be exactly one of "offline", "degraded" else INVALID_PROVIDER_STATUS. Result healthy is true when missing, echoes input when valid, else false; mode is "synthetic" when missing, echoes input when valid, else "synthetic"; provider_status is "offline" when missing, echoes input when valid, else "offline"; issues lists all applicable codes among INVALID_HEALTHY, INVALID_MODE, INVALID_PROVIDER_STATUS in that fixed order; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real health, availability, or production enforcement. This module is independently testable; application integration is outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "healthy": true,
+    "mode": "synthetic",
+    "provider_status": "offline"
+  },
+  "output": {
+    "healthy": true,
+    "issues": [],
+    "mode": "synthetic",
+    "ok": true,
+    "provider_status": "offline"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "healthy": false,
+    "provider_status": "degraded"
+  },
+  "output": {
+    "healthy": false,
+    "issues": [],
+    "mode": "synthetic",
+    "ok": true,
+    "provider_status": "degraded"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "healthy": 1,
+    "mode": "live",
+    "provider_status": "online"
+  },
+  "output": {
+    "healthy": false,
+    "issues": [
+      "INVALID_HEALTHY",
+      "INVALID_MODE",
+      "INVALID_PROVIDER_STATUS"
+    ],
+    "mode": "synthetic",
+    "ok": false,
+    "provider_status": "offline"
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_health_check.py`.
