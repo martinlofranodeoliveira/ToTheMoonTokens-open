@@ -511,3 +511,76 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_api_key_check.py`.
+
+
+<!-- community-core:offline-simulate-order-check -->
+### Synthetic Offline Simulate Order Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic simulate_order shape decisions from offline dashboard fixtures without network, credentials, or live services. It gives a single deterministic check for symbol, side, quantity and price_usd with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real orders, prices, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_simulate_order_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Reusable deterministic JSON core: services/api/src/tothemoon_api/community/offline_simulate_order_check.py, API run_feature(payload). This module is independently tested; application/UI integration is outside this change. Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields defaults with INVALID_PAYLOAD. For dict payloads extra keys are ignored and fields are validated in fixed order: symbol MUST be a string whose stripped length is 1..20 and whose stripped characters are only A-Z a-z 0-9 dot underscore hyphen else INVALID_SYMBOL; side when missing defaults to buy without error, otherwise MUST be exactly buy or sell else INVALID_SIDE; quantity when missing defaults to 0 without error, otherwise MUST be an integer excluding bool in range 0..1000000 inclusive else INVALID_QUANTITY; price_usd when missing defaults to 0 without error, otherwise MUST be an int or float excluding bool that is finite and in range 0..1000000 inclusive else INVALID_PRICE. Result symbol is stripped uppercased input when valid else empty string; side is buy when missing, echoes input when valid, else buy; quantity is 0 when missing, echoes input when valid, else 0; price_usd is 0 when missing, echoes input when valid, else 0; issues lists all applicable codes among INVALID_SYMBOL, INVALID_SIDE, INVALID_QUANTITY, INVALID_PRICE in that fixed order, with INVALID_PAYLOAD only for non-dict payloads; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real orders, prices, or production enforcement. This module is independently testable; application and UI integration are outside this change.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "price_usd": 12.5,
+    "quantity": 10,
+    "side": "buy",
+    "symbol": " weth "
+  },
+  "output": {
+    "issues": [],
+    "ok": true,
+    "price_usd": 12.5,
+    "quantity": 10,
+    "side": "buy",
+    "symbol": "WETH"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "symbol": "SOL"
+  },
+  "output": {
+    "issues": [],
+    "ok": true,
+    "price_usd": 0,
+    "quantity": 0,
+    "side": "buy",
+    "symbol": "SOL"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "price_usd": "free",
+    "quantity": -5,
+    "side": "hold",
+    "symbol": ""
+  },
+  "output": {
+    "issues": [
+      "INVALID_SYMBOL",
+      "INVALID_SIDE",
+      "INVALID_QUANTITY",
+      "INVALID_PRICE"
+    ],
+    "ok": false,
+    "price_usd": 0,
+    "quantity": 0,
+    "side": "buy",
+    "symbol": ""
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_simulate_order_check.py`.
