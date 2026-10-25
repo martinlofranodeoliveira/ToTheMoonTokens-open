@@ -1346,7 +1346,7 @@ def create_proposal(
             "mode": proposal.mode,
             "token_address": proposal.token_address,
             "chain": proposal.chain,
-            "api_key_prefix": api_key.prefix,
+            "api_key_prefix": api_key.prefix[:12],
         },
     )
     db.commit()

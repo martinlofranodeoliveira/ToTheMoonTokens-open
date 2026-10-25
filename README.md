@@ -50,6 +50,18 @@ operational deployment tests. Both API tests and frontend checks run through
 `scripts/checks-offline.py`, with no network or private credentials; dependencies
 and source are read-only and build/database scratch stays under `/tmp`.
 
+API-key lookup stores the first 16 characters as an internal selector, including
+four random characters after the `ttm_sk_live_` marker. It verifies the full salted
+Argon2 hash for every candidate in that bucket; a selector match alone never
+authenticates a key. Public responses and audit records keep the existing
+12-character display prefix. The raw key format, entropy and Argon2 settings are
+unchanged. Legacy rows with 12-character selectors still work and are promoted
+only after successful hash, owner and membership checks. Their first use, and
+invalid requests while legacy rows remain, can still scan the legacy bucket;
+deliberate selector collisions also require extra hash checks. Older binaries
+cannot verify newly indexed rows during mixed-version operation. This describes
+offline source behavior, without a live rollout or production performance claim.
+
 Provider numeric fields that are missing or non-finite (NaN, +/-Infinity) fall back to explicit defaults in `security.py` (`_float`/`_risk_score`); unavailable providers yield placeholder/degraded audits. This describes unavailable-data handling only and is not investment advice or a safety guarantee.
 
 ## Offline dashboard fixtures (synthetic, stdlib only)

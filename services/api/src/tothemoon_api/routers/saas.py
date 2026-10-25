@@ -173,7 +173,7 @@ def _api_key_export_response(api_key: ApiKey) -> dict[str, object]:
         "id": api_key.id,
         "org_id": api_key.org_id,
         "name": api_key.name,
-        "prefix": api_key.prefix,
+        "prefix": api_key.prefix[:12],
         "scopes": api_key.scopes,
         "revoked_at": api_key.revoked_at,
         "last_used_at": api_key.last_used_at,
@@ -461,20 +461,22 @@ def export_account_data(
             for row in memberships
         ],
         "api_keys": [
-            _export_row(
-                row,
-                (
-                    "id",
-                    "user_id",
-                    "org_id",
-                    "name",
-                    "prefix",
-                    "scopes",
-                    "revoked_at",
-                    "last_used_at",
-                    "created_at",
+            {
+                **_export_row(
+                    row,
+                    (
+                        "id",
+                        "user_id",
+                        "org_id",
+                        "name",
+                        "scopes",
+                        "revoked_at",
+                        "last_used_at",
+                        "created_at",
+                    ),
                 ),
-            )
+                "prefix": row.prefix[:12],
+            }
             for row in api_keys
         ],
         "provider_credentials": [
@@ -843,7 +845,7 @@ def list_api_keys(user: CurrentUser, db: DbSession) -> list[dict[str, object]]:
             "id": key.id,
             "org_id": key.org_id,
             "name": key.name,
-            "prefix": key.prefix,
+            "prefix": key.prefix[:12],
             "scopes": key.scopes,
             "last_used_at": key.last_used_at,
             "revoked_at": key.revoked_at,
@@ -913,7 +915,7 @@ def create_api_key(
         after={
             "id": api_key.id,
             "name": api_key.name,
-            "prefix": api_key.prefix,
+            "prefix": api_key.prefix[:12],
             "scopes": api_key.scopes,
         },
     )
@@ -923,7 +925,7 @@ def create_api_key(
         "id": api_key.id,
         "org_id": api_key.org_id,
         "name": api_key.name,
-        "prefix": api_key.prefix,
+        "prefix": api_key.prefix[:12],
         "scopes": api_key.scopes,
         "plaintext": plaintext,
     }
@@ -941,7 +943,7 @@ def revoke_api_key(
     api_key = db.query(ApiKey).filter(ApiKey.id == api_key_id, ApiKey.org_id == org.id).first()
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
-    before = {"revoked_at": api_key.revoked_at, "prefix": api_key.prefix}
+    before = {"revoked_at": api_key.revoked_at, "prefix": api_key.prefix[:12]}
     if api_key.revoked_at is None:
         api_key.revoked_at = utcnow_naive()
     record_audit_log(
@@ -953,7 +955,7 @@ def revoke_api_key(
         target_id=api_key.id,
         request=request,
         before=before,
-        after={"revoked_at": api_key.revoked_at, "prefix": api_key.prefix},
+        after={"revoked_at": api_key.revoked_at, "prefix": api_key.prefix[:12]},
     )
     db.commit()
     db.refresh(api_key)

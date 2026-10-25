@@ -51,7 +51,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def generate_api_key() -> tuple[str, str, str]:
     raw = "ttm_sk_live_" + secrets.token_urlsafe(32)
-    return raw, raw[:12], ph.hash(raw)
+    return raw, raw[:16], ph.hash(raw)
 
 
 def normalize_api_key_scopes(scopes: list[str] | set[str] | tuple[str, ...] | None) -> str:
@@ -174,32 +174,36 @@ def verify_api_key(
 ) -> ApiKey:
     if not api_key:
         raise HTTPException(status_code=401, detail="Missing X-API-Key")
-    prefix = api_key[:12]
-    candidates = db.query(ApiKey).filter(ApiKey.prefix == prefix, ApiKey.revoked_at.is_(None)).all()
-    for candidate in candidates:
-        try:
-            ph.verify(candidate.key_hash, api_key)
-        except (InvalidHashError, VerificationError, VerifyMismatchError):
-            continue
-        if candidate.org_id is None:
-            continue
-        owner_membership = (
-            db.query(Membership)
-            .filter(
-                Membership.user_id == candidate.user_id,
-                Membership.org_id == candidate.org_id,
+    # Include random characters in the selector; the first 12 are only a marker.
+    # Old rows remain usable and move out of the legacy bucket after verification.
+    for prefix in dict.fromkeys((api_key[:16], api_key[:12])):
+        candidates = db.query(ApiKey).filter(ApiKey.prefix == prefix, ApiKey.revoked_at.is_(None)).all()
+        for candidate in candidates:
+            try:
+                ph.verify(candidate.key_hash, api_key)
+            except (InvalidHashError, VerificationError, VerifyMismatchError):
+                continue
+            if candidate.org_id is None:
+                continue
+            owner_membership = (
+                db.query(Membership)
+                .filter(
+                    Membership.user_id == candidate.user_id,
+                    Membership.org_id == candidate.org_id,
+                )
+                .first()
             )
-            .first()
-        )
-        if owner_membership is None or not candidate.owner.is_active:
-            continue
-        candidate.last_used_at = utcnow_naive()
-        db.commit()
-        bind_trace_context(
-            endpoint=request.url.path,
-            org_id=candidate.org_id,
-            api_key_id=candidate.id,
-        )
-        enforce_api_key_rate_limit(candidate, request)
-        return candidate
+            if owner_membership is None or not candidate.owner.is_active:
+                continue
+            if candidate.prefix == api_key[:12]:
+                candidate.prefix = api_key[:16]
+            candidate.last_used_at = utcnow_naive()
+            db.commit()
+            bind_trace_context(
+                endpoint=request.url.path,
+                org_id=candidate.org_id,
+                api_key_id=candidate.id,
+            )
+            enforce_api_key_rate_limit(candidate, request)
+            return candidate
     raise HTTPException(status_code=403, detail="Invalid API Key")
