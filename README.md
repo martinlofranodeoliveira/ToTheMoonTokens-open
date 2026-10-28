@@ -596,3 +596,70 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_simulate_order_check.py`.
+
+
+<!-- community-core:offline-local-endpoint-check -->
+### Synthetic Offline Local Endpoint Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic loopback endpoint decisions for API port 8010 and web port 4173 without network, credentials, or live services. It gives a single deterministic host and port check with normalized outputs and fixed issue codes, reducing mock drift in offline tests. It performs no fetching, storage, trading, payment, or advice and makes no claim about real deployments, availability, or production enforcement.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_local_endpoint_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Reusable deterministic JSON core: services/api/src/tothemoon_api/community/offline_local_endpoint_check.py, API run_feature(payload). This module is independently tested; application/UI integration is outside this change. Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields ok false with empty api_host, zero api_port, zero web_port and single issue INVALID_PAYLOAD. For dict payloads extra keys are ignored and fields are validated in fixed order: api_host MUST be exactly 127.0.0.1 else INVALID_API_HOST; api_port MUST be an int excluding bool exactly equal to 8010 else INVALID_API_PORT; web_port MUST be an int excluding bool exactly equal to 4173 else INVALID_WEB_PORT. Result api_host echoes input when valid else empty string; api_port echoes input when valid else 0; web_port echoes input when valid else 0; issues lists all applicable codes among INVALID_API_HOST, INVALID_API_PORT, INVALID_WEB_PORT in that fixed order, with INVALID_PAYLOAD only for non-dict payloads; ok is true only when issues is empty. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, or advice and makes no claim about real hosts, ports, deployments, or production enforcement. This module is independently testable; application and UI integration are outside this change. Implementation uses only plain functions and immutable literal module constants with all mutable containers local, no imports, no decorators, classes, async, generators, globals, nonlocals, attribute assignment, deletion, dynamic calls or mutable defaults.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "api_host": "127.0.0.1",
+    "api_port": 8010,
+    "web_port": 4173
+  },
+  "output": {
+    "api_host": "127.0.0.1",
+    "api_port": 8010,
+    "issues": [],
+    "ok": true,
+    "web_port": 4173
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "api_host": "0.0.0.0",
+    "api_port": 8000,
+    "web_port": 3000
+  },
+  "output": {
+    "api_host": "",
+    "api_port": 0,
+    "issues": [
+      "INVALID_API_HOST",
+      "INVALID_API_PORT",
+      "INVALID_WEB_PORT"
+    ],
+    "ok": false,
+    "web_port": 0
+  }
+}
+```
+
+```json
+{
+  "input": "offline",
+  "output": {
+    "api_host": "",
+    "api_port": 0,
+    "issues": [
+      "INVALID_PAYLOAD"
+    ],
+    "ok": false,
+    "web_port": 0
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_local_endpoint_check.py`.
