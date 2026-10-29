@@ -663,3 +663,78 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_local_endpoint_check.py`.
+
+
+<!-- community-core:offline-api-key-bucket-check -->
+### Synthetic Offline API Key Bucket Scan Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic API-key lookup bucket decisions for offline mocks without network, credentials, hashing, or live services. It gives a single deterministic count of verifications from 16-character selector and legacy 12-character bucket sizes plus a constant selector-alone-never-authenticates flag, reducing mock drift where fixtures appear authenticated by selector match. It performs no fetching, storage, hashing, verification, trading, payment, or advice and makes no claim about real keys, entropy, rollout, performance, or production enforcement.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_api_key_bucket_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Reusable deterministic JSON core: services/api/src/tothemoon_api/community/offline_api_key_bucket_check.py, API run_feature(payload). This module is independently tested; application/UI integration is outside this change. Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, selector_bucket:0, legacy_bucket:0, include_legacy:false, hash_checks:0, selector_authenticates:false, issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: selector_bucket when missing defaults to 0 without error, otherwise MUST be an int excluding bool in range 0..1000000 inclusive else INVALID_SELECTOR_BUCKET; legacy_bucket when missing defaults to 0 without error, otherwise MUST be an int excluding bool in range 0..1000000 inclusive else INVALID_LEGACY_BUCKET; include_legacy when missing defaults to false without error, otherwise MUST be bool else INVALID_INCLUDE_LEGACY. Result selector_bucket is 0 when missing, echoes valid input, else 0; legacy_bucket is 0 when missing, echoes valid input, else 0; include_legacy is false when missing, echoes valid input, else false; hash_checks is normalized selector_bucket plus (normalized legacy_bucket when normalized include_legacy is true else 0); selector_authenticates is always false; issues lists all applicable codes among INVALID_SELECTOR_BUCKET, INVALID_LEGACY_BUCKET, INVALID_INCLUDE_LEGACY in that fixed order, with INVALID_PAYLOAD only for non-dict payloads; ok is true only when issues is empty. Models public behavior where the first 16 characters bucket candidates and legacy 12-character rows may also be scanned, with selector match alone never authenticating. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, hashing, verification, trading, payment, or advice and makes no claim about real keys, entropy, Argon2 settings, rollout, performance, or production enforcement. This module is independently testable; application and UI integration are outside this change. Implementation uses only plain functions and immutable literal module constants with all mutable containers local, no imports, no decorators, classes, async, generators, globals, nonlocals, attribute assignment, deletion, dynamic calls or mutable defaults.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "include_legacy": true,
+    "legacy_bucket": 1,
+    "selector_bucket": 2
+  },
+  "output": {
+    "hash_checks": 3,
+    "include_legacy": true,
+    "issues": [],
+    "legacy_bucket": 1,
+    "ok": true,
+    "selector_authenticates": false,
+    "selector_bucket": 2
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "include_legacy": false,
+    "legacy_bucket": 5,
+    "selector_bucket": 0
+  },
+  "output": {
+    "hash_checks": 0,
+    "include_legacy": false,
+    "issues": [],
+    "legacy_bucket": 5,
+    "ok": true,
+    "selector_authenticates": false,
+    "selector_bucket": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "include_legacy": 1,
+    "legacy_bucket": -1,
+    "selector_bucket": "2"
+  },
+  "output": {
+    "hash_checks": 0,
+    "include_legacy": false,
+    "issues": [
+      "INVALID_SELECTOR_BUCKET",
+      "INVALID_LEGACY_BUCKET",
+      "INVALID_INCLUDE_LEGACY"
+    ],
+    "legacy_bucket": 0,
+    "ok": false,
+    "selector_authenticates": false,
+    "selector_bucket": 0
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_api_key_bucket_check.py`.
