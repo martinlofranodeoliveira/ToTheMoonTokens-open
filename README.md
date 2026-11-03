@@ -738,3 +738,90 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_api_key_bucket_check.py`.
+
+
+<!-- community-core:offline-usage-check -->
+### Synthetic Offline Usage Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic usage panel decisions for offline mocks without network, credentials, or live services. It gives a single deterministic check for requests_today, requests_month, plan and quota shape from offline_dashboard fixtures, reducing mock drift where fixtures could imply real limits or earnings. It performs no fetching, storage, trading, payment, or advice and makes no claim about real plans, quotas, or production enforcement.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_usage_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Reusable deterministic JSON core: services/api/src/tothemoon_api/community/offline_usage_check.py, API run_feature(payload). This module is independently tested; application/UI integration is outside this change. Exposes run_feature(payload). payload SHOULD be a dict; any non-dict payload yields {ok:false, requests_today:0, requests_month:0, plan:"offline-demo", quota:{"active_api_keys":0,"simulate_order":0,"token_audit":0}, issues:["INVALID_PAYLOAD"]}. For dict payloads extra keys are ignored and fields are validated in fixed order: requests_today when missing defaults to 0 without error, otherwise MUST be int excluding bool in range 0..1000000 inclusive else INVALID_REQUESTS_TODAY; requests_month when missing defaults to 0 without error, otherwise MUST be int excluding bool in range 0..1000000 inclusive else INVALID_REQUESTS_MONTH; plan when missing defaults to "offline-demo" without error, otherwise MUST be exactly "offline-demo" else INVALID_PLAN; quota when missing defaults to {"active_api_keys":0,"simulate_order":0,"token_audit":0} without error, otherwise MUST be a dict else INVALID_QUOTA, and when dict each of simulate_order, token_audit, active_api_keys MUST be int excluding bool in range 0..1000000 inclusive else INVALID_QUOTA_LIMIT. Result requests_today is 0 when missing, echoes input when valid, else 0; requests_month is 0 when missing, echoes input when valid, else 0; plan is "offline-demo" when missing, echoes input when valid, else "offline-demo"; quota is default zeros when missing, echoes normalized three-key object when valid dict with valid values, else default zeros; issues lists all applicable codes among INVALID_REQUESTS_TODAY, INVALID_REQUESTS_MONTH, INVALID_PLAN, INVALID_QUOTA, INVALID_QUOTA_LIMIT in that fixed order, with INVALID_PAYLOAD only for non-dict payloads; ok is true only when issues is empty. Models public behavior where offline_dashboard.py builds synthetic usage with requests_today 0, requests_month 0, plan "offline-demo" and quota with simulate_order, token_audit, active_api_keys zeros, without fetching or storing real state. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies, preserves input, and performs no fetching, storage, trading, payment, settlement or advice and makes no claim about real plans, quotas, earnings or production enforcement. Implementation uses only plain functions and immutable literal module constants with all mutable containers local, no imports, no decorators, classes, async, generators, globals, nonlocals, attribute assignment, deletion, dynamic calls or mutable defaults.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {},
+  "output": {
+    "issues": [],
+    "ok": true,
+    "plan": "offline-demo",
+    "quota": {
+      "active_api_keys": 0,
+      "simulate_order": 0,
+      "token_audit": 0
+    },
+    "requests_month": 0,
+    "requests_today": 0
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "plan": "offline-demo",
+    "quota": {
+      "active_api_keys": 2,
+      "simulate_order": 5,
+      "token_audit": 5
+    },
+    "requests_month": 20,
+    "requests_today": 5
+  },
+  "output": {
+    "issues": [],
+    "ok": true,
+    "plan": "offline-demo",
+    "quota": {
+      "active_api_keys": 2,
+      "simulate_order": 5,
+      "token_audit": 5
+    },
+    "requests_month": 20,
+    "requests_today": 5
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "plan": "pro",
+    "quota": [],
+    "requests_month": -1,
+    "requests_today": "5"
+  },
+  "output": {
+    "issues": [
+      "INVALID_REQUESTS_TODAY",
+      "INVALID_REQUESTS_MONTH",
+      "INVALID_PLAN",
+      "INVALID_QUOTA"
+    ],
+    "ok": false,
+    "plan": "offline-demo",
+    "quota": {
+      "active_api_keys": 0,
+      "simulate_order": 0,
+      "token_audit": 0
+    },
+    "requests_month": 0,
+    "requests_today": 0
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_usage_check.py`.
