@@ -877,3 +877,93 @@ Examples (JSON input and expected output):
 ```
 
 Public regression tests: `lab_tests/test_community_offline_usage_check.py`.
+
+
+<!-- community-core:offline-trace-link-check -->
+### Synthetic Offline Decision Trace Link Checker for Local Mocks
+
+Helps local developers and test authors exercise synthetic decision traceability linking a contribution objective and version, a lab test path, and a declared pass/fail result without network, credentials, or live services. It gives a single deterministic linkage check that mirrors Contribuir fields and offline zero-failure validation, reducing mock drift where a fixture could imply real coverage or production proof. It performs no fetching, storage, trading, payment, or advice and makes no claim about real plans, earnings, or production enforcement.
+
+Reusable deterministic JSON core: `services/api/src/tothemoon_api/community/offline_trace_link_check.py`, API `run_feature(payload)`. This module is independently tested; application/UI integration is outside this change.
+
+Reusable deterministic JSON core: services/api/src/tothemoon_api/community/offline_trace_link_check.py, API run_feature(payload). This module is independently tested; application/UI integration is outside this change. Exposes run_feature(payload). Payload SHOULD be a dict; any non-dict payload yields {ok:false, linked:false, objective:"", test_path:"", passed:0, failed:0, issues:["INVALID_PAYLOAD"]}. For dict payloads extra top-level keys are ignored and fields are validated in fixed order: requirement MUST be a dict else INVALID_REQUIREMENT; when requirement is a dict, requirement objective MUST be a str whose stripped length is 1..200 else INVALID_OBJECTIVE and requirement version MUST be a str whose stripped length is 1..32 else INVALID_VERSION; test_path MUST be a str of length 15..80 starting with lab_tests/test_ ending with .py where the middle part is 1..60 chars of a-z 0-9 underscore else INVALID_TEST_PATH; declared_result MUST be a dict else INVALID_DECLARED_RESULT, otherwise declared_result passed MUST be an int with bool rejected 0..1000000 and declared_result failed MUST be an int with bool rejected 0..1000000 else INVALID_RESULT_COUNTS once; when passed and failed are both valid, failed MUST be 0 else UNEXPECTED_FAILURE. Result objective is stripped requirement objective when requirement is a dict and objective is a str else empty string; test_path echoes input when str else empty string; passed is declared passed when valid else 0; failed is declared failed when valid else 0; linked is true only when issues is empty else false; ok is true only when issues is empty else false; issues lists applicable codes at most once in fixed order INVALID_REQUIREMENT, INVALID_OBJECTIVE, INVALID_VERSION, INVALID_TEST_PATH, INVALID_DECLARED_RESULT, INVALID_RESULT_COUNTS, UNEXPECTED_FAILURE with INVALID_PAYLOAD only for non-dict payloads. Models synthetic offline traceability where README Contribuir requires objective, version, synthetic example, relevant tests, reproduction and docs update with no secrets, TRACKED_PUBLIC_PATHS uses lab_tests/test_*.py names, and validation scope declares zero failures, without implying real coverage, history, earnings, or production proof. The function is total, deterministic and pure with no I/O, environment, time, randomness, callbacks or dependencies and preserves input, performs no fetching, storage, trading, payment, settlement, wallet or advice and makes no claim about real services, earnings or production enforcement. Implementation uses only plain functions and immutable literal module constants with all mutable containers local, no decorators, classes, async, generators, globals, nonlocals, attribute assignment, deletion, dynamic calls or mutable defaults, with no imports.
+
+Examples (JSON input and expected output):
+
+```json
+{
+  "input": {
+    "declared_result": {
+      "failed": 0,
+      "passed": 10
+    },
+    "requirement": {
+      "objective": "offline dashboard fixture check",
+      "version": "v1"
+    },
+    "test_path": "lab_tests/test_offline_dashboard.py"
+  },
+  "output": {
+    "failed": 0,
+    "issues": [],
+    "linked": true,
+    "objective": "offline dashboard fixture check",
+    "ok": true,
+    "passed": 10,
+    "test_path": "lab_tests/test_offline_dashboard.py"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "declared_result": {
+      "failed": 1,
+      "passed": 5
+    },
+    "requirement": {
+      "objective": "quota guard check",
+      "version": "v2"
+    },
+    "test_path": "lab_tests/test_community_offline_quota_guard.py"
+  },
+  "output": {
+    "failed": 1,
+    "issues": [
+      "UNEXPECTED_FAILURE"
+    ],
+    "linked": false,
+    "objective": "quota guard check",
+    "ok": false,
+    "passed": 5,
+    "test_path": "lab_tests/test_community_offline_quota_guard.py"
+  }
+}
+```
+
+```json
+{
+  "input": {
+    "declared_result": {},
+    "requirement": {},
+    "test_path": "bad"
+  },
+  "output": {
+    "failed": 0,
+    "issues": [
+      "INVALID_OBJECTIVE",
+      "INVALID_VERSION",
+      "INVALID_TEST_PATH",
+      "INVALID_RESULT_COUNTS"
+    ],
+    "linked": false,
+    "objective": "",
+    "ok": false,
+    "passed": 0,
+    "test_path": "bad"
+  }
+}
+```
+
+Public regression tests: `lab_tests/test_community_offline_trace_link_check.py`.
